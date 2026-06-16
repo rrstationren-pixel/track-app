@@ -9,8 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, Image as ImageIcon } from "lucide-react";
-import { ImageGallery } from "@/components/image-gallery";
+import { ArrowLeft, Upload } from "lucide-react";
+import { AttachmentList } from "@/components/attachment-list";
 
 export const Route = createFileRoute("/_authenticated/task/$taskId")({
   head: () => ({ meta: [{ title: "任务详情" }] }),
@@ -20,6 +20,7 @@ export const Route = createFileRoute("/_authenticated/task/$taskId")({
 type Task = {
   id: string; title: string; description: string | null;
   assigned_to: string | null; status: string; due_date: string | null; created_at: string;
+  attachments: string[] | null;
 };
 type Report = { id: string; note: string; photo_url: string | null; submitted_at: string; employee_id: string };
 
@@ -34,7 +35,7 @@ function TaskDetailPage() {
   const [note, setNote] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
-  const [galleryPaths, setGalleryPaths] = useState<string[] | null>(null);
+  
 
   async function load() {
     const { data: t } = await supabase.from("tasks").select("*").eq("id", taskId).maybeSingle();
@@ -92,7 +93,7 @@ function TaskDetailPage() {
 
   if (!task) return <p className="text-muted-foreground">加载中...</p>;
 
-  const reportImages = reports.filter((r) => r.photo_url).map((r) => r.photo_url!) as string[];
+  
 
   return (
     <div className="space-y-4">
@@ -113,6 +114,13 @@ function TaskDetailPage() {
           </div>
         </div>
         {task.description && <p className="mt-3 whitespace-pre-wrap text-sm">{task.description}</p>}
+
+        {task.attachments && task.attachments.length > 0 && (
+          <div className="mt-4">
+            <h3 className="mb-2 text-sm font-medium">任务附件</h3>
+            <AttachmentList paths={task.attachments} />
+          </div>
+        )}
 
         <div className="mt-4 flex flex-wrap gap-2">
           {isAssignee && task.status !== "completed" && (
@@ -138,8 +146,8 @@ function TaskDetailPage() {
               <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} required />
             </div>
             <div className="space-y-1.5">
-              <Label>上传照片(可选)</Label>
-              <Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+              <Label>上传文件 (图片、PDF 等,可选)</Label>
+              <Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             </div>
             <Button type="submit" disabled={saving}>
               <Upload className="mr-1 h-4 w-4" /> {saving ? "提交中..." : "提交报告"}
@@ -149,39 +157,25 @@ function TaskDetailPage() {
       )}
 
       <Card className="p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold">报告记录 ({reports.length})</h2>
-          {reportImages.length > 0 && (
-            <Button size="sm" variant="outline" onClick={() => setGalleryPaths(reportImages)}>
-              <ImageIcon className="mr-1 h-4 w-4" /> 查看全部图片 ({reportImages.length})
-            </Button>
-          )}
-        </div>
+        <h2 className="mb-3 font-semibold">报告记录 ({reports.length})</h2>
         {reports.length === 0 && <p className="text-sm text-muted-foreground">暂无报告</p>}
-        <div className="space-y-2">
+        <div className="space-y-3">
           {reports.map((r, i) => (
             <div key={r.id} className="rounded border p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-xs text-muted-foreground">
-                  报告 #{reports.length - i} · {new Date(r.submitted_at).toLocaleString("zh-CN")}
-                </div>
-                {r.photo_url && (
-                  <Button size="sm" variant="ghost" onClick={() => setGalleryPaths([r.photo_url!])}>
-                    <ImageIcon className="mr-1 h-3.5 w-3.5" /> 查看图片
-                  </Button>
-                )}
+              <div className="text-xs text-muted-foreground">
+                报告 #{reports.length - i} · {new Date(r.submitted_at).toLocaleString("zh-CN")}
               </div>
               <p className="mt-1.5 whitespace-pre-wrap text-sm">{r.note}</p>
+              {r.photo_url && (
+                <div className="mt-2">
+                  <AttachmentList paths={[r.photo_url]} />
+                </div>
+              )}
             </div>
           ))}
         </div>
+        
       </Card>
-
-      <ImageGallery
-        paths={galleryPaths ?? []}
-        open={galleryPaths !== null}
-        onOpenChange={(o) => !o && setGalleryPaths(null)}
-      />
     </div>
   );
 }

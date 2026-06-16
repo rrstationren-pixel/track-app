@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Plus, CheckCircle2, Archive, UserCog, Pencil } from "lucide-react";
+import { AttachmentList } from "@/components/attachment-list";
 
 export const Route = createFileRoute("/_authenticated/admin/tasks")({
   head: () => ({ meta: [{ title: "任务管理" }] }),
@@ -24,6 +25,7 @@ type Overview = {
   created_at: string; updated_at: string; archived_at: string | null;
   assignee_name: string | null; assignee_email: string | null;
   report_count: number; last_report_at: string | null;
+  attachments?: string[] | null;
 };
 type Profile = { id: string; name: string; phone: string | null; active: boolean };
 
@@ -222,6 +224,16 @@ function ReassignButton({ task, employees, onSubmit }: {
   );
 }
 
+function sanitizeFilename(name: string) {
+  const dotIdx = name.lastIndexOf(".");
+  const rawExt = dotIdx >= 0 ? name.slice(dotIdx + 1) : "";
+  const ext = rawExt.replace(/[^a-zA-Z0-9]/g, "").toLowerCase().slice(0, 10) || "bin";
+  const base = (dotIdx >= 0 ? name.slice(0, dotIdx) : name)
+    .replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "")
+    .slice(0, 40) || "file";
+  return `${base}.${ext}`;
+}
+
 function TaskForm({ employees, task, onDone }: { employees: Profile[]; task?: Overview; onDone: () => void }) {
   const { user } = useAuth();
   const [title, setTitle] = useState(task?.title ?? "");
@@ -229,23 +241,52 @@ function TaskForm({ employees, task, onDone }: { employees: Profile[]; task?: Ov
   const [assignedTo, setAssignedTo] = useState(task?.assigned_to ?? "");
   const [dueDate, setDueDate] = useState(task?.due_date ?? "");
   const [status, setStatus] = useState(task?.status ?? "pending");
+  const [existing, setExisting] = useState<string[]>(task?.attachments ?? []);
+  const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!user) return;
     setSaving(true);
-    const payload = {
-      title, description, assigned_to: assignedTo || null,
-      due_date: dueDate || null, status,
-    };
-    const op = task
-      ? supabase.from("tasks").update(payload).eq("id", task.id)
-      : supabase.from("tasks").insert({ ...payload, created_by: user.id });
-    const { error } = await op;
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success(task ? "已保存" : "已创建"); onDone();
+    try {
+      const payload = {
+        title, description, assigned_to: assignedTo || null,
+        due_date: dueDate || null, status,
+      };
+      let taskId = task?.id;
+      if (task) {
+        const { error } = await supabase.from("tasks").update(payload).eq("id", task.id);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from("tasks").insert({ ...payload, created_by: user.id })
+          .select("id").single();
+        if (error) throw error;
+        taskId = data.id;
+      }
+      const uploaded: string[] = [];
+      for (const f of files) {
+        const path = `tasks/${taskId}/${Date.now()}-${sanitizeFilename(f.name)}`;
+        const { error: upErr } = await supabase.storage.from("task-photos")
+          .upload(path, f, { contentType: f.type || undefined });
+        if (upErr) throw upErr;
+        uploaded.push(path);
+      }
+      const finalAttachments = [...existing, ...uploaded];
+      const originalAttachments = task?.attachments ?? [];
+      if (uploaded.length > 0 || finalAttachments.length !== originalAttachments.length) {
+        const { error } = await supabase.from("tasks")
+          .update({ attachments: finalAttachments }).eq("id", taskId!);
+        if (error) throw error;
+        // Delete removed files
+        const removed = originalAttachments.filter((p) => !existing.includes(p));
+        if (removed.length > 0) await supabase.storage.from("task-photos").remove(removed);
+      }
+      toast.success(task ? "已保存" : "已创建"); onDone();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally { setSaving(false); }
   }
 
   return (
@@ -286,6 +327,23 @@ function TaskForm({ employees, task, onDone }: { employees: Profile[]; task?: Ov
           </Select>
         </div>
       )}
+      <div className="space-y-1.5">
+        <Label>附件 (图片、PDF 等)</Label>
+        {existing.length > 0 && (
+          <AttachmentList
+            paths={existing}
+            onRemove={(p) => setExisting((cur) => cur.filter((x) => x !== p))}
+          />
+        )}
+        <Input
+          type="file"
+          multiple
+          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+        />
+        {files.length > 0 && (
+          <p className="text-xs text-muted-foreground">已选 {files.length} 个文件</p>
+        )}
+      </div>
       <Button type="submit" className="w-full" disabled={saving}>{saving ? "保存中..." : task ? "保存" : "创建"}</Button>
     </form>
   );
