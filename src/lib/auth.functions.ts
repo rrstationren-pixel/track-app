@@ -38,27 +38,3 @@ export const resolveLoginEmail = createServerFn({ method: "POST" })
     return { email };
   });
 
-/**
- * Public availability check used by self-registration before calling signUp,
- * so we can show a friendly error rather than a raw auth failure.
- */
-export const checkRegistrationAvailability = createServerFn({ method: "POST" })
-  .inputValidator((input: { email?: string | null; phone?: string | null }) => ({
-    email: input?.email ? String(input.email).trim().toLowerCase() : null,
-    phone: input?.phone ? normalizePhone(String(input.phone)) : null,
-  }))
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    if (data.phone) {
-      const { data: p } = await supabaseAdmin
-        .from("profiles").select("id").eq("phone", data.phone).maybeSingle();
-      if (p) return { ok: false, reason: "phone_taken" as const };
-    }
-    if (data.email) {
-      const { data: p } = await supabaseAdmin
-        .from("profiles").select("id").eq("email", data.email).maybeSingle();
-      if (p) return { ok: false, reason: "email_taken" as const };
-    }
-    return { ok: true as const };
-  });

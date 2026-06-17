@@ -21,9 +21,11 @@ export const Route = createFileRoute("/_authenticated/admin/tasks")({
 
 type Overview = {
   id: string; title: string; description?: string | null; status: string;
-  assigned_to: string | null; due_date: string | null;
+  assigned_to: string | null; created_by: string; due_date: string | null;
   created_at: string; updated_at: string; archived_at: string | null;
+  completed_at: string | null;
   assignee_name: string | null; assignee_email: string | null;
+  creator_name: string | null;
   report_count: number; last_report_at: string | null;
   attachments?: string[] | null;
 };
@@ -151,11 +153,12 @@ function TasksPage() {
                   <Badge variant={STATUS_VARIANT[t.status]}>{STATUS_LABEL[t.status]}</Badge>
                   {isOverdue(t) && <Badge variant="destructive">已逾期</Badge>}
                   {t.archived_at && <Badge variant="outline">已归档</Badge>}
+                  <span>创建人: {t.creator_name ?? "—"}</span>
                   <span>负责人: {t.assignee_name ?? "未分配"}</span>
                   <span>创建: {new Date(t.created_at).toLocaleDateString("zh-CN")}</span>
                   {t.due_date && <span>截止: {t.due_date}</span>}
+                  {t.completed_at && <span>完成: {new Date(t.completed_at).toLocaleDateString("zh-CN")}</span>}
                   <span>报告: {t.report_count}</span>
-                  <span>更新: {new Date(t.updated_at).toLocaleString("zh-CN")}</span>
                 </div>
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -266,6 +269,13 @@ function TaskForm({ employees, task, onDone }: { employees: Profile[]; task?: Ov
         taskId = data.id;
       }
       const uploaded: string[] = [];
+      if (files.length > 0) {
+        const { validateUploadFile } = await import("@/lib/upload-validation");
+        for (const f of files) {
+          const errMsg = validateUploadFile(f);
+          if (errMsg) { toast.error(`${f.name}: ${errMsg}`); return; }
+        }
+      }
       for (const f of files) {
         const path = `tasks/${taskId}/${Date.now()}-${sanitizeFilename(f.name)}`;
         const { error: upErr } = await supabase.storage.from("task-photos")

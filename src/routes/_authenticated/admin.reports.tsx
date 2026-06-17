@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, ChevronRight, Eye } from "lucide-react";
+import { fmtDateTime } from "@/lib/task-utils";
 
 export const Route = createFileRoute("/_authenticated/admin/reports")({
   head: () => ({ meta: [{ title: "报告管理" }] }),
@@ -19,7 +20,7 @@ type Overview = {
   report_count: number; last_report_at: string | null;
   archived_at: string | null;
 };
-type Report = { id: string; note: string; photo_url: string | null; submitted_at: string };
+type Report = { id: string; note: string; photo_url: string | null; submitted_at: string; employee_id: string };
 
 const STATUS_LABEL: Record<string, string> = { pending: "待处理", in_progress: "进行中", completed: "已完成" };
 const STATUS_VARIANT: Record<string, "secondary" | "default" | "outline"> = { pending: "secondary", in_progress: "default", completed: "outline" };
@@ -28,6 +29,7 @@ function ReportsPage() {
   const [rows, setRows] = useState<Overview[]>([]);
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<Record<string, Report[] | "loading">>({});
+  const [submitterMap, setSubmitterMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     supabase.from("task_overview").select("*").is("archived_at", null)
@@ -48,9 +50,19 @@ function ReportsPage() {
       return;
     }
     setExpanded((p) => ({ ...p, [id]: "loading" }));
-    const { data } = await supabase.from("reports").select("id, note, photo_url, submitted_at")
+    const { data } = await supabase.from("reports").select("id, note, photo_url, submitted_at, employee_id")
       .eq("task_id", id).order("submitted_at", { ascending: false });
-    setExpanded((p) => ({ ...p, [id]: (data as Report[]) ?? [] }));
+    const list = (data as Report[]) ?? [];
+    setExpanded((p) => ({ ...p, [id]: list }));
+    const missing = list.map((r) => r.employee_id).filter((id) => !submitterMap[id]);
+    if (missing.length > 0) {
+      const { data: profs } = await supabase.from("profiles").select("id,name").in("id", Array.from(new Set(missing)));
+      setSubmitterMap((m) => {
+        const n = { ...m };
+        for (const p of profs ?? []) n[p.id] = p.name;
+        return n;
+      });
+    }
   }
 
   return (
@@ -70,7 +82,7 @@ function ReportsPage() {
                     <Badge variant={STATUS_VARIANT[t.status]}>{STATUS_LABEL[t.status]}</Badge>
                     <span>员工: {t.assignee_name ?? "未分配"}</span>
                     <span>报告: {t.report_count}</span>
-                    {t.last_report_at && <span>最近: {new Date(t.last_report_at).toLocaleString("zh-CN")}</span>}
+                    {t.last_report_at && <span>最近: {fmtDateTime(t.last_report_at)}</span>}
                   </div>
                 </div>
                 <div className="flex gap-1.5">
@@ -89,11 +101,17 @@ function ReportsPage() {
                   {exp.length === 0 && <p className="text-xs text-muted-foreground">无报告</p>}
                   {exp.map((r, i) => (
                     <div key={r.id} className="rounded border p-2.5">
+                      <div className="text-xs text-muted-foreground">报告 #{exp.length - i}</div>
                       <div className="text-xs text-muted-foreground">
-                        报告 #{exp.length - i} · {new Date(r.submitted_at).toLocaleString("zh-CN")}
-                        {r.photo_url && " · 含图片"}
+                        提交人: {submitterMap[r.employee_id] ?? "—"}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        提交时间: {fmtDateTime(r.submitted_at)}
                       </div>
                       <p className="mt-1 text-sm whitespace-pre-wrap">{r.note}</p>
+                      {r.photo_url && (
+                        <div className="mt-1 text-xs text-muted-foreground">附件数量: 1</div>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { ArrowLeft, Upload } from "lucide-react";
 import { AttachmentList } from "@/components/attachment-list";
+import { STATUS_LABEL, fmtDateTime, completionLabel } from "@/lib/task-utils";
 
 export const Route = createFileRoute("/_authenticated/task/$taskId")({
   head: () => ({ meta: [{ title: "任务详情" }] }),
@@ -19,12 +20,12 @@ export const Route = createFileRoute("/_authenticated/task/$taskId")({
 
 type Task = {
   id: string; title: string; description: string | null;
-  assigned_to: string | null; status: string; due_date: string | null; created_at: string;
+  assigned_to: string | null; created_by: string;
+  status: string; due_date: string | null; created_at: string;
+  completed_at: string | null;
   attachments: string[] | null;
 };
 type Report = { id: string; note: string; photo_url: string | null; submitted_at: string; employee_id: string };
-
-const STATUS_LABEL: Record<string, string> = { pending: "待处理", in_progress: "进行中", completed: "已完成" };
 
 function TaskDetailPage() {
   const { taskId } = Route.useParams();
@@ -32,19 +33,32 @@ function TaskDetailPage() {
   const [task, setTask] = useState<Task | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [assigneeName, setAssigneeName] = useState<string | null>(null);
+  const [creatorName, setCreatorName] = useState<string | null>(null);
+  const [submitterMap, setSubmitterMap] = useState<Record<string, string>>({});
   const [note, setNote] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
-  
 
   async function load() {
     const { data: t } = await supabase.from("tasks").select("*").eq("id", taskId).maybeSingle();
     setTask(t as Task | null);
     const { data: r } = await supabase.from("reports").select("*").eq("task_id", taskId).order("submitted_at", { ascending: false });
-    setReports((r as Report[]) ?? []);
-    if (t?.assigned_to) {
-      const { data: p } = await supabase.from("profiles").select("name").eq("id", t.assigned_to).maybeSingle();
-      setAssigneeName(p?.name ?? null);
+    const reportList = (r as Report[]) ?? [];
+    setReports(reportList);
+
+    const ids = new Set<string>();
+    if (t?.assigned_to) ids.add(t.assigned_to);
+    if (t?.created_by) ids.add(t.created_by);
+    for (const x of reportList) ids.add(x.employee_id);
+    if (ids.size > 0) {
+      const { data: profs } = await supabase.rpc("list_colleagues");
+      const m: Record<string, string> = {};
+      for (const p of (profs as { id: string; name: string }[] | null) ?? []) {
+        if (ids.has(p.id)) m[p.id] = p.name;
+      }
+      setSubmitterMap(m);
+      setAssigneeName(t?.assigned_to ? m[t.assigned_to] ?? null : null);
+      setCreatorName(t?.created_by ? m[t.created_by] ?? null : null);
     }
   }
   useEffect(() => { load(); }, [taskId]);
@@ -65,6 +79,9 @@ function TaskDetailPage() {
     try {
       let photo_url: string | null = null;
       if (file) {
+        const { validateUploadFile } = await import("@/lib/upload-validation");
+        const errMsg = validateUploadFile(file);
+        if (errMsg) { toast.error(errMsg); setSaving(false); return; }
         const dotIdx = file.name.lastIndexOf(".");
         const rawExt = dotIdx >= 0 ? file.name.slice(dotIdx + 1) : "";
         const ext = rawExt.replace(/[^a-zA-Z0-9]/g, "").toLowerCase().slice(0, 10) || "bin";
@@ -92,8 +109,7 @@ function TaskDetailPage() {
   }
 
   if (!task) return <p className="text-muted-foreground">加载中...</p>;
-
-  
+  const compLabel = completionLabel(task);
 
   return (
     <div className="space-y-4">
@@ -107,9 +123,16 @@ function TaskDetailPage() {
             <h1 className="text-xl font-bold">{task.title}</h1>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <Badge>{STATUS_LABEL[task.status]}</Badge>
+              <span>创建人: {creatorName ?? "—"}</span>
               <span>负责人: {assigneeName ?? "未分配"}</span>
-              {task.due_date && <span>截止: {task.due_date}</span>}
-              <span>创建: {new Date(task.created_at).toLocaleString("zh-CN")}</span>
+            </div>
+            <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-3">
+              <div>创建时间: {fmtDateTime(task.created_at)}</div>
+              <div>截止时间: {task.due_date ?? "—"}</div>
+              <div>
+                完成时间: {task.completed_at ? fmtDateTime(task.completed_at) : "—"}
+                {compLabel && <span className="ml-2 font-medium text-foreground">({compLabel})</span>}
+              </div>
             </div>
           </div>
         </div>
@@ -162,19 +185,25 @@ function TaskDetailPage() {
         <div className="space-y-3">
           {reports.map((r, i) => (
             <div key={r.id} className="rounded border p-3">
-              <div className="text-xs text-muted-foreground">
-                报告 #{reports.length - i} · {new Date(r.submitted_at).toLocaleString("zh-CN")}
+              <div className="text-xs text-muted-foreground">报告 #{reports.length - i}</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">
+                提交人: {submitterMap[r.employee_id] ?? "—"}
               </div>
-              <p className="mt-1.5 whitespace-pre-wrap text-sm">{r.note}</p>
+              <div className="text-xs text-muted-foreground">
+                提交时间: {fmtDateTime(r.submitted_at)}
+              </div>
+              <p className="mt-2 whitespace-pre-wrap text-sm">{r.note}</p>
               {r.photo_url && (
-                <div className="mt-2">
-                  <AttachmentList paths={[r.photo_url]} />
-                </div>
+                <>
+                  <div className="mt-2 text-xs text-muted-foreground">附件数量: 1</div>
+                  <div className="mt-2">
+                    <AttachmentList paths={[r.photo_url]} />
+                  </div>
+                </>
               )}
             </div>
           ))}
         </div>
-        
       </Card>
     </div>
   );

@@ -19,6 +19,7 @@ import { Route as AuthenticatedTaskTaskIdRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin.users'
 import { Route as AuthenticatedAdminTasksRouteImport } from './routes/_authenticated/admin.tasks'
 import { Route as AuthenticatedAdminReportsRouteImport } from './routes/_authenticated/admin.reports'
+import { Route as AuthenticatedAdminExportRouteImport } from './routes/_authenticated/admin.export'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -70,12 +71,19 @@ const AuthenticatedAdminReportsRoute =
     path: '/reports',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminExportRoute =
+  AuthenticatedAdminExportRouteImport.update({
+    id: '/export',
+    path: '/export',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/employee': typeof AuthenticatedEmployeeRoute
+  '/admin/export': typeof AuthenticatedAdminExportRoute
   '/admin/reports': typeof AuthenticatedAdminReportsRoute
   '/admin/tasks': typeof AuthenticatedAdminTasksRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
@@ -86,6 +94,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/employee': typeof AuthenticatedEmployeeRoute
+  '/admin/export': typeof AuthenticatedAdminExportRoute
   '/admin/reports': typeof AuthenticatedAdminReportsRoute
   '/admin/tasks': typeof AuthenticatedAdminTasksRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
@@ -99,6 +108,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/employee': typeof AuthenticatedEmployeeRoute
+  '/_authenticated/admin/export': typeof AuthenticatedAdminExportRoute
   '/_authenticated/admin/reports': typeof AuthenticatedAdminReportsRoute
   '/_authenticated/admin/tasks': typeof AuthenticatedAdminTasksRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
@@ -112,6 +122,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/admin'
     | '/employee'
+    | '/admin/export'
     | '/admin/reports'
     | '/admin/tasks'
     | '/admin/users'
@@ -122,6 +133,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/employee'
+    | '/admin/export'
     | '/admin/reports'
     | '/admin/tasks'
     | '/admin/users'
@@ -134,6 +146,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/admin'
     | '/_authenticated/employee'
+    | '/_authenticated/admin/export'
     | '/_authenticated/admin/reports'
     | '/_authenticated/admin/tasks'
     | '/_authenticated/admin/users'
@@ -219,10 +232,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminReportsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/export': {
+      id: '/_authenticated/admin/export'
+      path: '/export'
+      fullPath: '/admin/export'
+      preLoaderRoute: typeof AuthenticatedAdminExportRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
   }
 }
 
 interface AuthenticatedAdminRouteChildren {
+  AuthenticatedAdminExportRoute: typeof AuthenticatedAdminExportRoute
   AuthenticatedAdminReportsRoute: typeof AuthenticatedAdminReportsRoute
   AuthenticatedAdminTasksRoute: typeof AuthenticatedAdminTasksRoute
   AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
@@ -230,6 +251,7 @@ interface AuthenticatedAdminRouteChildren {
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
+  AuthenticatedAdminExportRoute: AuthenticatedAdminExportRoute,
   AuthenticatedAdminReportsRoute: AuthenticatedAdminReportsRoute,
   AuthenticatedAdminTasksRoute: AuthenticatedAdminTasksRoute,
   AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,

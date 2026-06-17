@@ -88,6 +88,7 @@ export type Database = {
           archived_at: string | null
           assigned_to: string | null
           attachments: string[]
+          completed_at: string | null
           created_at: string
           created_by: string
           description: string | null
@@ -101,6 +102,7 @@ export type Database = {
           archived_at?: string | null
           assigned_to?: string | null
           attachments?: string[]
+          completed_at?: string | null
           created_at?: string
           created_by: string
           description?: string | null
@@ -114,6 +116,7 @@ export type Database = {
           archived_at?: string | null
           assigned_to?: string | null
           attachments?: string[]
+          completed_at?: string | null
           created_at?: string
           created_by?: string
           description?: string | null
@@ -151,8 +154,11 @@ export type Database = {
           assigned_to: string | null
           assignee_email: string | null
           assignee_name: string | null
+          attachments: string[] | null
+          completed_at: string | null
           created_at: string | null
           created_by: string | null
+          creator_name: string | null
           description: string | null
           due_date: string | null
           id: string | null
@@ -172,6 +178,14 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      list_colleagues: {
+        Args: never
+        Returns: {
+          active: boolean
+          id: string
+          name: string
+        }[]
       }
     }
     Enums: {

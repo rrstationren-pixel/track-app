@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { LayoutDashboard, ListChecks, FileText, Users } from "lucide-react";
+import { LayoutDashboard, ListChecks, FileText, Users, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -9,11 +9,12 @@ export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminLayout,
 });
 
-const NAV: { to: "/admin" | "/admin/tasks" | "/admin/reports" | "/admin/users"; label: string; icon: typeof LayoutDashboard; exact?: boolean }[] = [
+const NAV: { to: "/admin" | "/admin/tasks" | "/admin/reports" | "/admin/users" | "/admin/export"; label: string; icon: typeof LayoutDashboard; exact?: boolean }[] = [
   { to: "/admin", label: "仪表盘", icon: LayoutDashboard, exact: true },
   { to: "/admin/tasks", label: "任务管理", icon: ListChecks },
   { to: "/admin/reports", label: "报告管理", icon: FileText },
   { to: "/admin/users", label: "用户管理", icon: Users },
+  { to: "/admin/export", label: "导出统计", icon: Download },
 ];
 
 function AdminLayout() {
